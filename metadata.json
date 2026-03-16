@@ -1,5 +1,5 @@
 {
-  "name": "React Morse - Aprende Código Morse",
-  "description": "Una aplicación interactiva para aprender y practicar código morse mediante lecciones y oraciones.",
-  "requestFramePermissions": []
+  "name": "Morse Spy Academy: Global Ops",
+  "description": "Plataforma de entrenamiento de espionaje con chat global, ranking en tiempo real y radio de voz con IA.",
+  "requestFramePermissions": ["microphone"]
 }

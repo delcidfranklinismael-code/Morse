@@ -37,7 +37,11 @@ import {
   LogOut,
   MessageSquare,
   Users,
-  Send
+  Send,
+  Radio,
+  Mic,
+  MicOff,
+  Waves
 } from 'lucide-react';
 import { 
   MORSE_DICTIONARY, 
@@ -60,6 +64,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { GoogleGenAI, Modality } from "@google/genai";
 
 export default function App() {
   const [currentView, setCurrentView] = useState('main');
@@ -88,6 +93,15 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Live Radio State
+  const [isRadioActive, setIsRadioActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [radioStatus, setRadioStatus] = useState("Standby");
+  const liveSessionRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const processorRef = useRef(null);
+  const audioQueueRef = useRef([]);
 
   const handleFirestoreError = (error, operationType, path) => {
     const errInfo = {
@@ -229,6 +243,119 @@ export default function App() {
       });
     } catch (e) {
       handleFirestoreError(e, 'create', 'messages');
+    }
+  };
+
+  const startRadio = async () => {
+    if (isRadioActive) {
+      stopRadio();
+      return;
+    }
+
+    try {
+      setRadioStatus("Conectando...");
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      
+      const session = await ai.live.connect({
+        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+          },
+          systemInstruction: "Eres un operador de radio militar experto en código Morse. Tu nombre en clave es 'Vanguardia'. Responde de forma breve, profesional y con un toque de misterio. Si el usuario te habla en Morse, tradúcelo. Mantén la atmósfera de una misión secreta.",
+        },
+        callbacks: {
+          onopen: () => {
+            setRadioStatus("Transmitiendo");
+            setIsRadioActive(true);
+            startMicStreaming();
+          },
+          onmessage: async (message) => {
+            if (message.serverContent?.modelTurn?.parts[0]?.inlineData?.data) {
+              const base64Audio = message.serverContent.modelTurn.parts[0].inlineData.data;
+              playAudioChunk(base64Audio);
+            }
+            if (message.serverContent?.interrupted) {
+              audioQueueRef.current = [];
+            }
+          },
+          onclose: () => stopRadio(),
+          onerror: (e) => {
+            console.error("Radio Error:", e);
+            stopRadio();
+          }
+        }
+      });
+      liveSessionRef.current = session;
+    } catch (e) {
+      console.error("Failed to start radio:", e);
+      setRadioStatus("Error de Conexión");
+    }
+  };
+
+  const startMicStreaming = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (isMuted || !liveSessionRef.current) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Convert to 16-bit PCM
+        const pcmData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+        }
+        const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
+        liveSessionRef.current.sendRealtimeInput({
+          media: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+        });
+      };
+
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+      processorRef.current = { stream, source, processor };
+    } catch (e) {
+      console.error("Mic Error:", e);
+    }
+  };
+
+  const playAudioChunk = (base64) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const pcmData = new Int16Array(bytes.buffer);
+    const floatData = new Float32Array(pcmData.length);
+    for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 0x7FFF;
+
+    const buffer = audioContextRef.current.createBuffer(1, floatData.length, 16000);
+    buffer.getChannelData(0).set(floatData);
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+    source.start();
+  };
+
+  const stopRadio = () => {
+    setIsRadioActive(false);
+    setRadioStatus("Standby");
+    if (liveSessionRef.current) {
+      liveSessionRef.current.close();
+      liveSessionRef.current = null;
+    }
+    if (processorRef.current) {
+      processorRef.current.stream.getTracks().forEach(t => t.stop());
+      processorRef.current.source.disconnect();
+      processorRef.current.processor.disconnect();
+      processorRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
   };
 
@@ -1360,6 +1487,88 @@ export default function App() {
     );
   };
 
+  const renderRadio = () => (
+    <motion.div 
+      key="radio"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className="min-h-screen p-6 max-w-md mx-auto flex flex-col"
+    >
+      <header className="flex justify-between items-center mb-8">
+        <button onClick={() => { stopRadio(); setCurrentView('main'); }} className="p-2 hover:bg-zinc-100 rounded-full">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-xl font-black italic uppercase">Radio de Operaciones</h2>
+        <div className="w-10" />
+      </header>
+
+      <div className="flex-1 flex flex-col items-center justify-center gap-12">
+        {/* Radio Visualizer */}
+        <div className="relative w-64 h-64 flex items-center justify-center">
+          <motion.div 
+            animate={isRadioActive ? { scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl -z-10"
+          />
+          <div className={`w-48 h-48 rounded-full border-8 flex items-center justify-center transition-all duration-500 ${isRadioActive ? 'border-emerald-500 bg-emerald-50' : 'border-zinc-200 bg-white'}`}>
+            {isRadioActive ? (
+              <div className="flex gap-1 items-end h-12">
+                {[...Array(5)].map((_, i) => (
+                  <motion.div 
+                    key={i}
+                    animate={{ height: [10, 40, 10] }}
+                    transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                    className="w-2 bg-emerald-500 rounded-full"
+                  />
+                ))}
+              </div>
+            ) : (
+              <Radio className="w-16 h-16 text-zinc-200" />
+            )}
+          </div>
+        </div>
+
+        <div className="text-center">
+          <div className="text-xs font-black text-zinc-400 uppercase tracking-[0.3em] mb-2">Estado de Frecuencia</div>
+          <div className={`text-3xl font-black italic uppercase ${isRadioActive ? 'text-emerald-600' : 'text-zinc-400'}`}>
+            {radioStatus}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6 w-full">
+          <button 
+            onClick={startRadio}
+            className={`w-full py-6 rounded-[2rem] font-black uppercase tracking-widest flex items-center justify-center gap-4 transition-all shadow-xl ${
+              isRadioActive 
+              ? 'bg-rose-500 text-white shadow-rose-200' 
+              : 'bg-zinc-900 text-white shadow-zinc-200'
+            }`}
+          >
+            {isRadioActive ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            {isRadioActive ? 'Cerrar Canal' : 'Abrir Canal de Voz'}
+          </button>
+
+          {isRadioActive && (
+            <button 
+              onClick={() => setIsMuted(!isMuted)}
+              className={`w-full py-4 rounded-2xl font-bold uppercase text-xs tracking-widest border-2 transition-all ${
+                isMuted ? 'bg-zinc-100 border-zinc-200 text-zinc-400' : 'bg-white border-zinc-900 text-zinc-900'
+              }`}
+            >
+              {isMuted ? 'Micrófono Silenciado' : 'Micrófono Activo'}
+            </button>
+          )}
+        </div>
+
+        <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-relaxed">
+          Estás conectado a la frecuencia 'Vanguardia'.<br/>
+          Habla con la IA para recibir instrucciones de misión.
+        </p>
+      </div>
+    </motion.div>
+  );
+
   const renderCinematics = () => (
     <>
       <AnimatePresence>
@@ -1496,6 +1705,12 @@ export default function App() {
                   <MessageSquare className="w-6 h-6" /> Chat Secreto
                 </button>
                 <button 
+                  onClick={() => { setCurrentView('radio'); setIsMenuOpen(false); }}
+                  className="flex items-center gap-4 w-full text-left font-bold text-lg hover:text-zinc-500 transition-colors"
+                >
+                  <Radio className="w-6 h-6" /> Radio de Operaciones
+                </button>
+                <button 
                   onClick={() => { setCurrentView('settings'); setIsMenuOpen(false); }}
                   className="flex items-center gap-4 w-full text-left font-bold text-lg hover:text-zinc-500 transition-colors"
                 >
@@ -1569,6 +1784,7 @@ export default function App() {
         {currentView === 'mission_preview' && renderMissionPreview()}
         {currentView === 'leaderboard' && renderLeaderboard()}
         {currentView === 'chat' && renderChat()}
+        {currentView === 'radio' && renderRadio()}
       </AnimatePresence>
 
       {renderTutorial()}
