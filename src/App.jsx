@@ -32,7 +32,12 @@ import {
   Music,
   Info,
   Keyboard,
-  MousePointer2
+  MousePointer2,
+  LogIn,
+  LogOut,
+  MessageSquare,
+  Users,
+  Send
 } from 'lucide-react';
 import { 
   MORSE_DICTIONARY, 
@@ -42,6 +47,19 @@ import {
   LETTER_WAIT_TIME 
 } from './constants';
 import { morseAudio, musicService } from './services/audioService';
+import { auth, db, signIn, logOut } from './firebase';
+import { 
+  doc, 
+  setDoc, 
+  onSnapshot, 
+  collection, 
+  query, 
+  orderBy, 
+  limit, 
+  addDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('main');
@@ -64,6 +82,37 @@ export default function App() {
   // Cinematic States
   const [showIgnite, setShowIgnite] = useState(false);
   const [showExtinguish, setShowExtinguish] = useState(false);
+
+  // Firebase State
+  const [user, setUser] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleFirestoreError = (error, operationType, path) => {
+    const errInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+        tenantId: auth.currentUser?.tenantId,
+        providerInfo: auth.currentUser?.providerData.map(provider => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL
+        })) || []
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    // We don't necessarily want to crash the whole app with a throw here if it's just a listener
+    // but the instructions say MUST throw a new error.
+    // However, in a listener, throwing might just be caught by the browser.
+  };
 
   // Stats State
   const [stats, setStats] = useState(() => {
@@ -90,7 +139,98 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('morse_stats_v4', JSON.stringify(stats));
-  }, [stats]);
+    
+    // Sync with Firestore if logged in
+    if (user && !isSyncing) {
+      const syncStats = async () => {
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            level: stats.level,
+            streak: stats.streak,
+            totalCorrect: stats.totalCorrect,
+            lastActive: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          console.error("Error syncing stats:", e);
+        }
+      };
+      syncStats();
+    }
+  }, [stats, user]);
+
+  // Firebase Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) {
+        // Load stats from Firestore on login
+        setIsSyncing(true);
+        const userDoc = doc(db, 'users', u.uid);
+        onSnapshot(userDoc, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setStats(prev => ({
+              ...prev,
+              level: data.level || prev.level,
+              streak: data.streak || prev.streak,
+              totalCorrect: data.totalCorrect || prev.totalCorrect
+            }));
+          }
+          setIsSyncing(false);
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Leaderboard Listener
+  useEffect(() => {
+    if (!user) {
+      setLeaderboard([]);
+      return;
+    }
+    const q = query(collection(db, 'users'), orderBy('level', 'desc'), limit(10));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data());
+      setLeaderboard(data);
+    }, (error) => {
+      handleFirestoreError(error, 'get', 'users');
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // Chat Listener
+  useEffect(() => {
+    if (!user) {
+      setChatMessages([]);
+      return;
+    }
+    const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data()).reverse();
+      setChatMessages(data);
+    }, (error) => {
+      handleFirestoreError(error, 'get', 'messages');
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  const sendMessage = async (text) => {
+    if (!user || !text.trim()) return;
+    try {
+      await addDoc(collection(db, 'messages'), {
+        uid: user.uid,
+        displayName: user.displayName,
+        text: text.trim(),
+        createdAt: serverTimestamp()
+      });
+    } catch (e) {
+      handleFirestoreError(e, 'create', 'messages');
+    }
+  };
 
   // Music Management
   useEffect(() => {
@@ -1088,6 +1228,138 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const renderLeaderboard = () => (
+    <motion.div 
+      key="leaderboard"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="min-h-screen p-6 max-w-md mx-auto flex flex-col"
+    >
+      <header className="flex justify-between items-center mb-8">
+        <button onClick={() => setCurrentView('main')} className="p-2 hover:bg-zinc-100 rounded-full">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-xl font-black italic uppercase">Ranking Global</h2>
+        <div className="w-10" />
+      </header>
+
+      <div className="bg-zinc-900 text-white p-6 rounded-[2rem] mb-8 shadow-xl relative overflow-hidden">
+        <div className="relative z-10">
+          <Trophy className="w-12 h-12 text-yellow-400 mb-4" />
+          <h3 className="text-3xl font-black italic uppercase leading-none mb-2">Los Mejores Espías</h3>
+          <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Sincronizado en tiempo real</p>
+        </div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 blur-3xl rounded-full -mr-16 -mt-16" />
+      </div>
+
+      <div className="flex-1 space-y-3">
+        {leaderboard.map((entry, i) => (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            key={entry.uid} 
+            className={`flex items-center gap-4 p-4 rounded-2xl border-2 ${entry.uid === user?.uid ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-zinc-900'}`}
+          >
+            <div className="w-8 font-black text-xl italic text-zinc-400">#{i + 1}</div>
+            <img src={entry.photoURL} alt={entry.displayName} className="w-10 h-10 rounded-full border-2 border-zinc-900" />
+            <div className="flex-1">
+              <div className="font-bold text-sm truncate w-32">{entry.displayName}</div>
+              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Nivel {entry.level}</div>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center gap-1 text-orange-500 font-black">
+                <Flame className="w-4 h-4" />
+                {entry.streak}
+              </div>
+            </div>
+          </motion.div>
+        ))}
+        {leaderboard.length === 0 && (
+          <div className="text-center py-12 text-zinc-400 font-bold italic">Cargando ranking...</div>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  const renderChat = () => {
+    const [msgInput, setMsgInput] = useState("");
+    
+    const handleSend = () => {
+      if (!user) {
+        signIn();
+        return;
+      }
+      sendMessage(msgInput);
+      setMsgInput("");
+    };
+
+    return (
+      <motion.div 
+        key="chat"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        className="min-h-screen p-6 max-w-md mx-auto flex flex-col"
+      >
+        <header className="flex justify-between items-center mb-8">
+          <button onClick={() => setCurrentView('main')} className="p-2 hover:bg-zinc-100 rounded-full">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h2 className="text-xl font-black italic uppercase">Chat Secreto</h2>
+          <div className="w-10" />
+        </header>
+
+        <div className="bg-emerald-500 text-white p-6 rounded-[2rem] mb-6 shadow-lg">
+          <MessageSquare className="w-10 h-10 mb-3" />
+          <h3 className="text-2xl font-black italic uppercase leading-none mb-1">Canal Encriptado</h3>
+          <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest">Solo para agentes autorizados</p>
+        </div>
+
+        <div className="flex-1 bg-white border-2 border-zinc-900 rounded-[2rem] p-4 mb-4 overflow-y-auto space-y-4 max-h-[50vh]">
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex flex-col ${msg.uid === user?.uid ? 'items-end' : 'items-start'}`}>
+              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1 px-2">
+                {msg.displayName}
+              </div>
+              <div className={`p-3 rounded-2xl max-w-[80%] font-mono font-bold text-sm tracking-widest ${
+                msg.uid === user?.uid ? 'bg-zinc-900 text-white rounded-tr-none' : 'bg-zinc-100 text-zinc-900 rounded-tl-none'
+              }`}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {chatMessages.length === 0 && (
+            <div className="text-center py-12 text-zinc-400 font-bold italic">No hay mensajes aún...</div>
+          )}
+        </div>
+
+        <div className="relative">
+          <input 
+            type="text"
+            value={msgInput}
+            onChange={(e) => setMsgInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Escribe en Morse..."
+            className="w-full bg-white border-2 border-zinc-900 rounded-2xl py-4 px-6 pr-16 font-mono font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 transition-all"
+          />
+          <button 
+            onClick={handleSend}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+        {!user && (
+          <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-4">
+            Debes <button onClick={signIn} className="text-zinc-900 underline">conectar tu perfil</button> para enviar mensajes
+          </p>
+        )}
+      </motion.div>
+    );
+  };
+
   const renderCinematics = () => (
     <>
       <AnimatePresence>
@@ -1212,6 +1484,18 @@ export default function App() {
                   <Target className="w-6 h-6" /> Mi Progreso
                 </button>
                 <button 
+                  onClick={() => { setCurrentView('leaderboard'); setIsMenuOpen(false); }}
+                  className="flex items-center gap-4 w-full text-left font-bold text-lg hover:text-zinc-500 transition-colors"
+                >
+                  <Users className="w-6 h-6" /> Ranking Global
+                </button>
+                <button 
+                  onClick={() => { setCurrentView('chat'); setIsMenuOpen(false); }}
+                  className="flex items-center gap-4 w-full text-left font-bold text-lg hover:text-zinc-500 transition-colors"
+                >
+                  <MessageSquare className="w-6 h-6" /> Chat Secreto
+                </button>
+                <button 
                   onClick={() => { setCurrentView('settings'); setIsMenuOpen(false); }}
                   className="flex items-center gap-4 w-full text-left font-bold text-lg hover:text-zinc-500 transition-colors"
                 >
@@ -1219,6 +1503,30 @@ export default function App() {
                 </button>
                 
                 <div className="pt-6 border-t border-zinc-100">
+                  {user ? (
+                    <div className="mb-6 p-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200">
+                      <div className="flex items-center gap-3 mb-3">
+                        <img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-zinc-900" />
+                        <div>
+                          <div className="text-xs font-black text-emerald-600 uppercase tracking-widest">Agente</div>
+                          <div className="font-bold text-sm truncate w-32">{user.displayName}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => { logOut(); setIsMenuOpen(false); }}
+                        className="w-full py-2 bg-white border-2 border-zinc-900 text-zinc-900 text-xs font-black rounded-xl uppercase tracking-widest flex items-center justify-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" /> Desconectarse
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => { signIn(); setIsMenuOpen(false); }}
+                      className="w-full py-4 bg-zinc-900 text-white font-black rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3 mb-6"
+                    >
+                      <LogIn className="w-5 h-5" /> Conectar Perfil
+                    </button>
+                  )}
                   <button 
                     onClick={() => setSoundEnabled(!soundEnabled)}
                     className="flex items-center justify-between w-full p-4 bg-zinc-50 rounded-xl font-bold"
@@ -1259,6 +1567,8 @@ export default function App() {
         {currentView === 'stats' && renderStats()}
         {currentView === 'settings' && renderSettings()}
         {currentView === 'mission_preview' && renderMissionPreview()}
+        {currentView === 'leaderboard' && renderLeaderboard()}
+        {currentView === 'chat' && renderChat()}
       </AnimatePresence>
 
       {renderTutorial()}

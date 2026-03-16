@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user progress and profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User's public name" },
+        "photoURL": { "type": "string", "description": "User's avatar URL" },
+        "level": { "type": "integer", "description": "Current level reached" },
+        "streak": { "type": "integer", "description": "Current win streak" },
+        "totalCorrect": { "type": "integer", "description": "Total correct words" },
+        "lastActive": { "type": "string", "format": "date-time", "description": "Last time the user played" }
+      },
+      "required": ["uid", "displayName", "level"]
+    },
+    "Message": {
+      "title": "Global Message",
+      "description": "A message sent in the global Morse chat.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Sender's UID" },
+        "displayName": { "type": "string", "description": "Sender's name" },
+        "text": { "type": "string", "description": "Message content in Morse" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Time sent" }
+      },
+      "required": ["uid", "displayName", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user profiles and stats."
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Global chat messages."
+    }
+  }
+}
