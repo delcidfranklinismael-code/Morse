@@ -37,4 +37,4 @@ export const SENTENCES = [
 ];
 
 export const DASH_THRESHOLD = 250;
-export const LETTER_WAIT_TIME = 700;
+export const LETTER_WAIT_TIME = 500;

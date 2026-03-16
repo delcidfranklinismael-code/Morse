@@ -268,7 +268,7 @@ export default function App() {
 
   const deleteLast = () => {
     if (currentMorseBuffer.length > 0) {
-      setCurrentMorseBuffer("");
+      setCurrentMorseBuffer(prev => prev.slice(0, -1));
     } else if (typedWord.length > 0) {
       setTypedWord(prev => prev.slice(0, -1));
     }
@@ -388,7 +388,7 @@ export default function App() {
         )}
       </div>
 
-      <div className="grid gap-4 w-full max-sm:max-w-sm">
+      <div className="grid gap-4 w-full max-w-sm mx-auto">
         <button 
           onClick={() => generateLevelMission(stats.level)}
           className="group relative flex items-center justify-between p-8 bg-zinc-900 text-white rounded-2xl transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.2)] active:translate-x-1 active:translate-y-1 active:shadow-none"
@@ -678,6 +678,16 @@ export default function App() {
   const renderPlay = () => {
     const activeWord = targetWords[currentWordIndex];
     
+    if (!activeWord) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <button onClick={() => setCurrentView('main')} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-black uppercase italic">
+            Volver al Menú
+          </button>
+        </div>
+      );
+    }
+
     return (
       <motion.div 
         initial={{ opacity: 0 }}
