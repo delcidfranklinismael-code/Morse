@@ -383,7 +383,10 @@ export default function App() {
       exit={{ opacity: 0, y: -20 }}
       className="flex flex-col items-center justify-center min-h-screen p-6 text-center"
     >
-      <div className="mb-4 p-4 bg-black text-white rounded-2xl shadow-2xl rotate-[-2deg]">
+      <div className="relative mb-4 p-4 bg-black text-white rounded-2xl shadow-2xl rotate-[-2deg]">
+        <div className="absolute -top-4 -left-4 bg-emerald-500 text-white px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest rotate-[-15deg] shadow-lg border-2 border-black z-10">
+          Beta
+        </div>
         <h1 className="text-5xl font-black tracking-tighter uppercase italic">Morse Master</h1>
       </div>
       
