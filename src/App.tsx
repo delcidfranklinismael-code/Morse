@@ -27,7 +27,8 @@ import {
   Flame,
   Settings as SettingsIcon,
   Eye,
-  EyeOff
+  EyeOff,
+  Share
 } from 'lucide-react';
 import { 
   MORSE_DICTIONARY, 
@@ -358,6 +359,19 @@ export default function App() {
       setCurrentView('results');
     } else {
       setCurrentWordIndex(prev => prev + 1);
+    }
+  };
+
+  const shareResults = () => {
+    const text = `¡He logrado una racha de ${stats.streak} en Morse Master! 📡🔥 Nivel: ${stats.level}. ¿Puedes superarme? #MorseMaster`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Morse Master',
+        text: text,
+        url: 'https://morse-psi.vercel.app/',
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(text);
     }
   };
 
@@ -814,6 +828,14 @@ export default function App() {
         </div>
 
         <div className="grid gap-4">
+          <button 
+            onClick={shareResults}
+            className="w-full py-4 bg-white border-2 border-zinc-900 text-zinc-900 font-black rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+          >
+            <Share className="w-5 h-5" />
+            Compartir Racha
+          </button>
+
           {allCorrect ? (
             <button 
               onClick={() => generateLevelMission(stats.level)}

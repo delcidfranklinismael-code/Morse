@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Master - Versión Simple</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .active-press { transform: scale(0.95) translateY(4px); background-color: #18181b; }
+    </style>
+</head>
+<body class="bg-zinc-50 min-h-screen flex flex-col items-center justify-center p-6">
+
+    <!-- Encabezado -->
+    <div class="mb-8 p-4 bg-black text-white rounded-2xl shadow-2xl rotate-[-2deg]">
+        <h1 class="text-4xl font-black tracking-tighter uppercase italic">Morse Master JS</h1>
+    </div>
+
+    <!-- Pantalla de Visualización -->
+    <div class="text-center mb-12">
+        <div id="typed-text" class="text-6xl font-black tracking-widest mb-2 min-h-[1.2em]"></div>
+        <div id="morse-buffer" class="text-3xl font-mono font-bold text-zinc-400 tracking-[0.2em] h-10"></div>
+    </div>
+
+    <!-- Botón de Morse -->
+    <div class="relative w-32 h-32 group cursor-pointer select-none" id="morse-btn">
+        <div class="absolute inset-0 bg-zinc-900 rounded-full shadow-[0_8px_0_0_rgba(0,0,0,1)]" id="btn-shadow"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-white font-black text-xs uppercase tracking-widest">
+            Pulse
+        </div>
+    </div>
+
+    <p class="mt-12 text-zinc-400 text-sm font-bold uppercase tracking-widest">
+        Punto: Clic rápido | Raya: Mantener presionado
+    </p>
+
+    <script>
+        // Diccionario Morse Simple
+        const MORSE_MAP = {
+            ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E",
+            "..-.": "F", "--.": "G", "....": "H", "..": "I", ".---": "J",
+            "-.-": "K", ".-..": "L", "--": "M", "-.": "N", "---": "O",
+            ".--.": "P", "--.-": "Q", ".-.": "R", "...": "S", "-": "T",
+            "..-": "U", "...-": "V", ".--": "W", "-..-": "X", "-.--": "Y", "--..": "Z"
+        };
+
+        let buffer = "";
+        let typed = "";
+        let startTime = 0;
+        let timeout = null;
+
+        const typedEl = document.getElementById('typed-text');
+        const bufferEl = document.getElementById('morse-buffer');
+        const btn = document.getElementById('morse-btn');
+        const shadow = document.getElementById('btn-shadow');
+
+        function commitLetter() {
+            if (buffer === "") return;
+            const letter = MORSE_MAP[buffer] || "?";
+            typed += letter;
+            buffer = "";
+            updateUI();
+        }
+
+        function updateUI() {
+            typedEl.innerText = typed;
+            bufferEl.innerText = buffer;
+        }
+
+        // Eventos de Presión
+        const startPress = (e) => {
+            e.preventDefault();
+            startTime = Date.now();
+            shadow.style.boxShadow = "none";
+            shadow.style.transform = "translateY(4px)";
+            if (timeout) clearTimeout(timeout);
+        };
+
+        const endPress = (e) => {
+            e.preventDefault();
+            if (startTime === 0) return;
+            
+            const duration = Date.now() - startTime;
+            startTime = 0;
+            shadow.style.boxShadow = "0 8px 0 0 rgba(0,0,0,1)";
+            shadow.style.transform = "translateY(0)";
+
+            buffer += (duration < 250 ? '.' : '-');
+            updateUI();
+
+            // Esperar 800ms para convertir el morse en letra
+            timeout = setTimeout(commitLetter, 800);
+        };
+
+        btn.addEventListener('mousedown', startPress);
+        btn.addEventListener('mouseup', endPress);
+        btn.addEventListener('touchstart', startPress);
+        btn.addEventListener('touchend', endPress);
+
+    </script>
+</body>
+</html>
