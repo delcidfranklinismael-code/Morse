@@ -28,7 +28,8 @@ import {
   Settings as SettingsIcon,
   Eye,
   EyeOff,
-  Share
+  Share,
+  Music
 } from 'lucide-react';
 import { 
   MORSE_DICTIONARY, 
@@ -1083,6 +1084,19 @@ export default function App() {
                     </div>
                     <div className={`w-12 h-6 rounded-full p-1 transition-colors ${soundEnabled ? 'bg-zinc-900' : 'bg-zinc-300'}`}>
                       <div className={`w-4 h-4 bg-white rounded-full transition-transform ${soundEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setMusicEnabled(!musicEnabled)}
+                    className="flex items-center justify-between w-full p-4 bg-zinc-50 rounded-xl font-bold mt-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Music className="w-5 h-5" />
+                      <span>Música</span>
+                    </div>
+                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${musicEnabled ? 'bg-emerald-500' : 'bg-zinc-300'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${musicEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                     </div>
                   </button>
                 </div>
