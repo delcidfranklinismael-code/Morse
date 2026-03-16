@@ -233,6 +233,18 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  const handleSignIn = async () => {
+    try {
+      await signIn();
+    } catch (error) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log("El usuario cerró la ventana de inicio de sesión.");
+      } else {
+        console.error("Error al iniciar sesión:", error);
+      }
+    }
+  };
+
   const sendMessage = async (text) => {
     if (!user || !text.trim()) return;
     try {
@@ -1414,7 +1426,7 @@ export default function App() {
   const renderChat = () => {
     const handleSend = () => {
       if (!user) {
-        signIn();
+        handleSignIn();
         return;
       }
       sendMessage(msgInput);
@@ -1479,7 +1491,7 @@ export default function App() {
         </div>
         {!user && (
           <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-4">
-            Debes <button onClick={signIn} className="text-zinc-900 underline">conectar tu perfil</button> para enviar mensajes
+            Debes <button onClick={handleSignIn} className="text-zinc-900 underline">conectar tu perfil</button> para enviar mensajes
           </p>
         )}
       </motion.div>
@@ -1735,7 +1747,7 @@ export default function App() {
                     </div>
                   ) : (
                     <button 
-                      onClick={() => { signIn(); setIsMenuOpen(false); }}
+                      onClick={() => { handleSignIn(); setIsMenuOpen(false); }}
                       className="w-full py-4 bg-zinc-900 text-white font-black rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3 mb-6"
                     >
                       <LogIn className="w-5 h-5" /> Conectar Perfil
