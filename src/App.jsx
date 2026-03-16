@@ -60,8 +60,7 @@ export default function App() {
 
   // Stats State
   const [stats, setStats] = useState(() => {
-    const saved = localStorage.getItem('morse_stats_v4');
-    return saved ? JSON.parse(saved) : {
+    const defaultStats = {
       level: 1,
       totalErrors: 0,
       totalCorrect: 0,
@@ -71,6 +70,14 @@ export default function App() {
       consecutivePerfectLevels: 0,
       visualAidEnabled: true
     };
+    try {
+      const saved = localStorage.getItem('morse_stats_v4');
+      if (!saved) return defaultStats;
+      const parsed = JSON.parse(saved);
+      return { ...defaultStats, ...parsed };
+    } catch (e) {
+      return defaultStats;
+    }
   });
 
   useEffect(() => {
@@ -266,7 +273,10 @@ export default function App() {
     setCurrentMorseBuffer(prev => prev + (duration < DASH_THRESHOLD ? '.' : '-'));
   };
 
-  const deleteLast = () => {
+  const deleteLast = (e) => {
+    if (e) e.preventDefault();
+    if (letterTimeoutRef.current) clearTimeout(letterTimeoutRef.current);
+    
     if (currentMorseBuffer.length > 0) {
       setCurrentMorseBuffer(prev => prev.slice(0, -1));
     } else if (typedWord.length > 0) {
@@ -359,6 +369,7 @@ export default function App() {
   // Views
   const renderMain = () => (
     <motion.div 
+      key="main"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -434,6 +445,7 @@ export default function App() {
 
   const renderSettings = () => (
     <motion.div 
+      key="settings"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen p-6 max-w-md mx-auto"
@@ -519,6 +531,7 @@ export default function App() {
 
   const renderMissionPreview = () => (
     <motion.div 
+      key="mission_preview"
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className="min-h-screen flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto"
@@ -557,6 +570,7 @@ export default function App() {
 
   const renderStats = () => (
     <motion.div 
+      key="stats"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen p-6 max-w-md mx-auto"
@@ -612,6 +626,7 @@ export default function App() {
 
   const renderPractice = () => (
     <motion.div 
+      key="practice"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen flex flex-col p-6 max-w-md mx-auto"
@@ -660,6 +675,7 @@ export default function App() {
             onMouseUp={handlePressEnd}
             onTouchStart={handlePressStart}
             onTouchEnd={handlePressEnd}
+            onContextMenu={(e) => e.preventDefault()}
             className="relative w-32 h-32 group active:scale-95 transition-transform"
           >
             <div className="absolute inset-0 bg-zinc-900 rounded-full shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2 transition-all" />
@@ -690,6 +706,7 @@ export default function App() {
 
     return (
       <motion.div 
+        key="play"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="min-h-screen flex flex-col p-6 max-w-md mx-auto"
@@ -745,8 +762,9 @@ export default function App() {
           {/* Controls */}
           <div className="grid grid-cols-3 items-center gap-8 mb-12">
             <button 
-              onClick={deleteLast}
-              className="flex items-center justify-center w-16 h-16 mx-auto rounded-full border-2 border-zinc-200 hover:border-zinc-900 transition-colors"
+              onMouseDown={deleteLast}
+              onTouchStart={deleteLast}
+              className="flex items-center justify-center w-16 h-16 mx-auto rounded-full border-2 border-zinc-200 hover:border-zinc-900 transition-colors active:bg-zinc-100"
             >
               <Delete className="w-6 h-6" />
             </button>
@@ -756,6 +774,7 @@ export default function App() {
               onMouseUp={handlePressEnd}
               onTouchStart={handlePressStart}
               onTouchEnd={handlePressEnd}
+              onContextMenu={(e) => e.preventDefault()}
               className="relative w-28 h-28 mx-auto group active:scale-95 transition-transform"
             >
               <div className="absolute inset-0 bg-zinc-900 rounded-full shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2 transition-all" />
@@ -789,6 +808,7 @@ export default function App() {
 
     return (
       <motion.div 
+        key="results"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="min-h-screen p-6 max-w-md mx-auto flex flex-col"
