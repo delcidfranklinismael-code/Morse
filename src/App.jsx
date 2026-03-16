@@ -29,7 +29,10 @@ import {
   Eye,
   EyeOff,
   Share,
-  Music
+  Music,
+  Info,
+  Keyboard,
+  MousePointer2
 } from 'lucide-react';
 import { 
   MORSE_DICTIONARY, 
@@ -54,6 +57,9 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [missionDescription, setMissionDescription] = useState("");
   const [missionDifficultyLabel, setMissionDifficultyLabel] = useState("");
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [isKeyPressed, setIsKeyPressed] = useState(false);
 
   // Cinematic States
   const [showIgnite, setShowIgnite] = useState(false);
@@ -69,7 +75,8 @@ export default function App() {
       streak: 0,
       isStreakUnlocked: false,
       consecutivePerfectLevels: 0,
-      visualAidEnabled: true
+      visualAidEnabled: true,
+      hasSeenTutorial: false
     };
     try {
       const saved = localStorage.getItem('morse_stats_v4');
@@ -256,15 +263,21 @@ export default function App() {
     };
   }, [currentMorseBuffer, commitLetter]);
 
-  const handlePressStart = (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!stats.hasSeenTutorial && currentView === 'main') {
+      setShowTutorial(true);
+    }
+  }, [stats.hasSeenTutorial, currentView]);
+
+  const handlePressStart = useCallback((e) => {
+    if (e) e.preventDefault();
     pressStartTimeRef.current = Date.now();
     if (letterTimeoutRef.current) clearTimeout(letterTimeoutRef.current);
     startBeep();
-  };
+  }, [startBeep]);
 
-  const handlePressEnd = (e) => {
-    e.preventDefault();
+  const handlePressEnd = useCallback((e) => {
+    if (e) e.preventDefault();
     if (pressStartTimeRef.current === 0) return;
     
     stopBeep();
@@ -272,9 +285,9 @@ export default function App() {
     pressStartTimeRef.current = 0;
 
     setCurrentMorseBuffer(prev => prev + (duration < DASH_THRESHOLD ? '.' : '-'));
-  };
+  }, [stopBeep]);
 
-  const deleteLast = (e) => {
+  const deleteLast = useCallback((e) => {
     if (e) e.preventDefault();
     if (letterTimeoutRef.current) clearTimeout(letterTimeoutRef.current);
     
@@ -283,7 +296,38 @@ export default function App() {
     } else if (typedWord.length > 0) {
       setTypedWord(prev => prev.slice(0, -1));
     }
-  };
+  }, [currentMorseBuffer, typedWord]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (currentView !== 'play' && currentView !== 'practice') return;
+      if (e.repeat) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        setIsKeyPressed(true);
+        handlePressStart(e);
+      }
+      if (e.code === 'Backspace') {
+        deleteLast(e);
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (currentView !== 'play' && currentView !== 'practice') return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        setIsKeyPressed(false);
+        handlePressEnd(e);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [currentView, handlePressStart, handlePressEnd]);
 
   const submitWord = () => {
     // Force commit if buffer exists
@@ -368,6 +412,87 @@ export default function App() {
   };
 
   // Views
+  const finishTutorial = () => {
+    setStats(prev => ({ ...prev, hasSeenTutorial: true }));
+    setShowTutorial(false);
+  };
+
+  const tutorialSteps = [
+    {
+      title: "¡Bienvenido Recluta!",
+      content: "Estás a punto de aprender el lenguaje secreto de los espías: el Código Morse.",
+      icon: <Sparkles className="w-12 h-12 text-emerald-500" />
+    },
+    {
+      title: "Cómo Transmitir",
+      content: window.innerWidth > 768 
+        ? "En tu portátil, usa la tecla ESPACIO o ENTER. Presiona corto para un PUNTO (.) y largo para una RAYA (-)."
+        : "En tu teléfono, pulsa el botón central. Un toque rápido es un PUNTO (.) y mantenerlo es una RAYA (-).",
+      icon: window.innerWidth > 768 ? <Keyboard className="w-12 h-12 text-zinc-900" /> : <MousePointer2 className="w-12 h-12 text-zinc-900" />
+    },
+    {
+      title: "Formando Letras",
+      content: "Después de cada letra, espera un momento y el sistema la reconocerá automáticamente. ¡No hay prisa!",
+      icon: <TypeIcon className="w-12 h-12 text-zinc-900" />
+    }
+  ];
+
+  const renderTutorial = () => (
+    <AnimatePresence>
+      {showTutorial && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6"
+        >
+          <motion.div 
+            key={tutorialStep}
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="max-w-sm w-full text-center"
+          >
+            <div className="flex justify-center mb-8">
+              {tutorialSteps[tutorialStep].icon}
+            </div>
+            <h2 className="text-3xl font-black uppercase italic mb-4">
+              {tutorialSteps[tutorialStep].title}
+            </h2>
+            <p className="text-zinc-500 font-medium leading-relaxed mb-12">
+              {tutorialSteps[tutorialStep].content}
+            </p>
+            
+            <div className="flex flex-col gap-4">
+              {tutorialStep < tutorialSteps.length - 1 ? (
+                <button 
+                  onClick={() => setTutorialStep(prev => prev + 1)}
+                  className="w-full py-5 bg-zinc-900 text-white font-black rounded-2xl uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                >
+                  Siguiente
+                </button>
+              ) : (
+                <button 
+                  onClick={finishTutorial}
+                  className="w-full py-5 bg-emerald-500 text-white font-black rounded-2xl uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                >
+                  ¡Entendido!
+                </button>
+              )}
+              
+              <div className="flex justify-center gap-2">
+                {tutorialSteps.map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={`w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-zinc-900' : 'bg-zinc-200'}`} 
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
   const renderMain = () => (
     <motion.div 
       key="main"
@@ -416,6 +541,13 @@ export default function App() {
         </button>
 
         <div className="grid grid-cols-3 gap-4 mt-4">
+          <button 
+            onClick={() => setShowTutorial(true)}
+            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-zinc-900 rounded-2xl hover:bg-zinc-50 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none"
+          >
+            <Info className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Ayuda</span>
+          </button>
           <button 
             onClick={startPractice}
             className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-zinc-900 rounded-2xl hover:bg-zinc-50 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none"
@@ -518,7 +650,20 @@ export default function App() {
           </div>
         </div>
 
-        <div className="pt-8">
+        <div className="pt-8 space-y-4">
+          <div className="p-6 bg-zinc-50 rounded-2xl border border-zinc-200">
+            <h3 className="text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Info className="w-4 h-4" /> Información del Proyecto
+            </h3>
+            <p className="text-[11px] text-zinc-500 font-medium leading-relaxed mb-4">
+              React Morse es una herramienta educativa diseñada para enseñar el código morse de forma interactiva. 
+              Ideal para entusiastas de la radio, espionaje o simplemente curiosos.
+            </p>
+            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+              © 2026 React Morse Project
+            </div>
+          </div>
+
           <button 
             onClick={initiateReset}
             className="w-full py-4 bg-red-50 text-red-600 border-2 border-red-200 rounded-2xl font-black uppercase tracking-widest hover:bg-red-100 transition-colors"
@@ -677,11 +822,11 @@ export default function App() {
             onTouchStart={handlePressStart}
             onTouchEnd={handlePressEnd}
             onContextMenu={(e) => e.preventDefault()}
-            className="relative w-32 h-32 group active:scale-95 transition-transform"
+            className={`relative w-32 h-32 group transition-transform ${isKeyPressed ? 'scale-95' : 'active:scale-95'}`}
           >
-            <div className="absolute inset-0 bg-zinc-900 rounded-full shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2 transition-all" />
+            <div className={`absolute inset-0 bg-zinc-900 rounded-full transition-all ${isKeyPressed ? 'shadow-none translate-y-2' : 'shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2'}`} />
             <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xs uppercase tracking-widest">
-              Pulse
+              {isKeyPressed ? '...' : 'Pulse'}
             </div>
           </button>
         </div>
@@ -776,11 +921,11 @@ export default function App() {
               onTouchStart={handlePressStart}
               onTouchEnd={handlePressEnd}
               onContextMenu={(e) => e.preventDefault()}
-              className="relative w-28 h-28 mx-auto group active:scale-95 transition-transform"
+              className={`relative w-28 h-28 mx-auto group transition-transform ${isKeyPressed ? 'scale-95' : 'active:scale-95'}`}
             >
-              <div className="absolute inset-0 bg-zinc-900 rounded-full shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2 transition-all" />
+              <div className={`absolute inset-0 bg-zinc-900 rounded-full transition-all ${isKeyPressed ? 'shadow-none translate-y-2' : 'shadow-[0_8px_0_0_rgba(0,0,0,1)] group-active:shadow-none group-active:translate-y-2'}`} />
               <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xs uppercase tracking-widest">
-                Pulse
+                {isKeyPressed ? '...' : 'Pulse'}
               </div>
             </button>
 
@@ -1115,6 +1260,8 @@ export default function App() {
         {currentView === 'settings' && renderSettings()}
         {currentView === 'mission_preview' && renderMissionPreview()}
       </AnimatePresence>
+
+      {renderTutorial()}
     </div>
   );
 }
