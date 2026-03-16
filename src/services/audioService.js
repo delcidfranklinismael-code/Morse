@@ -4,13 +4,13 @@
  */
 
 class MorseAudioService {
-  private audioCtx: AudioContext | null = null;
-  private oscillator: OscillatorNode | null = null;
-  private gainNode: GainNode | null = null;
+  audioCtx = null;
+  oscillator = null;
+  gainNode = null;
 
-  private init() {
+  init() {
     if (!this.audioCtx) {
-      this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
   }
 
@@ -54,11 +54,11 @@ class MorseAudioService {
 }
 
 class MusicService {
-  private currentAudio: HTMLAudioElement | null = null;
-  private isMuted: boolean = false;
-  private currentTrack: string | null = null;
+  currentAudio = null;
+  isMuted = false;
+  currentTrack = null;
 
-  play(url: string, loop: boolean = true) {
+  play(url, loop = true) {
     if (this.currentTrack === url) return;
     
     this.stop();
@@ -80,7 +80,7 @@ class MusicService {
     }
   }
 
-  setMuted(muted: boolean) {
+  setMuted(muted) {
     this.isMuted = muted;
     if (this.currentAudio) {
       this.currentAudio.muted = muted;

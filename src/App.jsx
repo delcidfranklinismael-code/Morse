@@ -39,33 +39,14 @@ import {
 } from './constants';
 import { morseAudio, musicService } from './services/audioService';
 
-type View = 'main' | 'play' | 'results' | 'practice' | 'stats' | 'mission_preview' | 'settings';
-
-interface Result {
-  target: string;
-  user: string;
-  isCorrect: boolean;
-}
-
-interface Stats {
-  level: number;
-  totalErrors: number;
-  totalCorrect: number;
-  challengesCompleted: number;
-  streak: number;
-  isStreakUnlocked: boolean;
-  consecutivePerfectLevels: number;
-  visualAidEnabled: boolean;
-}
-
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>('main');
-  const [targetWords, setTargetWords] = useState<string[]>([]);
+  const [currentView, setCurrentView] = useState('main');
+  const [targetWords, setTargetWords] = useState([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [userWords, setUserWords] = useState<string[]>([]);
+  const [userWords, setUserWords] = useState([]);
   const [typedWord, setTypedWord] = useState("");
   const [currentMorseBuffer, setCurrentMorseBuffer] = useState("");
-  const [results, setResults] = useState<Result[]>([]);
+  const [results, setResults] = useState([]);
   const [isCorrectionMode, setIsCorrectionMode] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
@@ -78,7 +59,7 @@ export default function App() {
   const [showExtinguish, setShowExtinguish] = useState(false);
 
   // Stats State
-  const [stats, setStats] = useState<Stats>(() => {
+  const [stats, setStats] = useState(() => {
     const saved = localStorage.getItem('morse_stats_v4');
     return saved ? JSON.parse(saved) : {
       level: 1,
@@ -127,15 +108,15 @@ export default function App() {
 
   // Practice Mode State
   const [practiceChar, setPracticeChar] = useState('A');
-  const [practiceFeedback, setPracticeFeedback] = useState<'none' | 'correct' | 'wrong'>('none');
+  const [practiceFeedback, setPracticeFeedback] = useState('none');
 
   // Reset Progress States
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetCode, setResetCode] = useState("");
   const [resetInput, setResetInput] = useState("");
 
-  const pressStartTimeRef = useRef<number>(0);
-  const letterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pressStartTimeRef = useRef(0);
+  const letterTimeoutRef = useRef(null);
 
   // Audio handling
   const startBeep = useCallback(() => {
@@ -146,7 +127,7 @@ export default function App() {
     if (soundEnabled) morseAudio.stop();
   }, [soundEnabled]);
 
-  const generateLevelMission = (level: number) => {
+  const generateLevelMission = (level) => {
     setCurrentView('mission_preview');
     
     // Offline Logic
@@ -267,14 +248,14 @@ export default function App() {
     };
   }, [currentMorseBuffer, commitLetter]);
 
-  const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePressStart = (e) => {
     e.preventDefault();
     pressStartTimeRef.current = Date.now();
     if (letterTimeoutRef.current) clearTimeout(letterTimeoutRef.current);
     startBeep();
   };
 
-  const handlePressEnd = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePressEnd = (e) => {
     e.preventDefault();
     if (pressStartTimeRef.current === 0) return;
     
@@ -363,10 +344,10 @@ export default function App() {
   };
 
   const shareResults = () => {
-    const text = `¡He logrado una racha de ${stats.streak} en Morse Master! 📡🔥 Nivel: ${stats.level}. ¿Puedes superarme? #MorseMaster`;
+    const text = `¡He logrado una racha de ${stats.streak} en React Morse! 📡🔥 Nivel: ${stats.level}. ¿Puedes superarme? #ReactMorse`;
     if (navigator.share) {
       navigator.share({
-        title: 'Morse Master',
+        title: 'React Morse',
         text: text,
         url: 'https://morse-psi.vercel.app/',
       }).catch(console.error);
@@ -387,7 +368,7 @@ export default function App() {
         <div className="absolute -top-4 -left-4 bg-emerald-500 text-white px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest rotate-[-15deg] shadow-lg border-2 border-black z-10">
           Beta
         </div>
-        <h1 className="text-5xl font-black tracking-tighter uppercase italic">Morse Master</h1>
+        <h1 className="text-5xl font-black tracking-tighter uppercase italic">React Morse</h1>
       </div>
       
       <div className="flex items-center gap-4 mb-12">
@@ -407,7 +388,7 @@ export default function App() {
         )}
       </div>
 
-      <div className="grid gap-4 w-full max-w-sm">
+      <div className="grid gap-4 w-full max-sm:max-w-sm">
         <button 
           onClick={() => generateLevelMission(stats.level)}
           className="group relative flex items-center justify-between p-8 bg-zinc-900 text-white rounded-2xl transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.2)] active:translate-x-1 active:translate-y-1 active:shadow-none"
@@ -806,7 +787,7 @@ export default function App() {
           <div className={`inline-flex p-4 rounded-full mb-6 ${allCorrect ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-600'}`}>
             {allCorrect ? <Sparkles className="w-16 h-16" /> : <Play className="w-16 h-16" />}
           </div>
-          <h2 className="text-4xl font-black italic uppercase italic mb-2">
+          <h2 className="text-4xl font-black italic uppercase mb-2">
             {allCorrect ? '¡Nivel Superado!' : 'Nivel Completado'}
           </h2>
           <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm">
