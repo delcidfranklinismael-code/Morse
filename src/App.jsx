@@ -93,6 +93,7 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [msgInput, setMsgInput] = useState("");
 
   // Live Radio State
   const [isRadioActive, setIsRadioActive] = useState(false);
@@ -1411,8 +1412,6 @@ export default function App() {
   );
 
   const renderChat = () => {
-    const [msgInput, setMsgInput] = useState("");
-    
     const handleSend = () => {
       if (!user) {
         signIn();
