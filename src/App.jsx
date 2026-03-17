@@ -94,6 +94,8 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [msgInput, setMsgInput] = useState("");
+  const [loginError, setLoginError] = useState(null);
+  const chatEndRef = useRef(null);
 
   // Live Radio State
   const [isRadioActive, setIsRadioActive] = useState(false);
@@ -233,14 +235,37 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
+
+  const formatMessageDate = (timestamp) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString('es-ES', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit'
+    });
+  };
+
   const handleSignIn = async () => {
+    setLoginError(null);
     try {
       await signIn();
     } catch (error) {
       if (error.code === 'auth/popup-closed-by-user') {
         console.log("El usuario cerró la ventana de inicio de sesión.");
+      } else if (error.code === 'auth/popup-blocked') {
+        setLoginError("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes o abre la app en una pestaña nueva.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("Este dominio no está autorizado en Firebase. Prueba abriendo la app en una pestaña nueva.");
       } else {
         console.error("Error al iniciar sesión:", error);
+        setLoginError("Hubo un problema al conectar. Prueba abriendo la app en una pestaña nueva.");
       }
     }
   };
@@ -1458,8 +1483,9 @@ export default function App() {
         <div className="flex-1 bg-white border-2 border-zinc-900 rounded-[2rem] p-4 mb-4 overflow-y-auto space-y-4 max-h-[50vh]">
           {chatMessages.map((msg, i) => (
             <div key={i} className={`flex flex-col ${msg.uid === user?.uid ? 'items-end' : 'items-start'}`}>
-              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1 px-2">
-                {msg.displayName}
+              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1 px-2 flex justify-between w-full gap-4">
+                <span>{msg.displayName}</span>
+                <span className="opacity-60">{formatMessageDate(msg.createdAt)}</span>
               </div>
               <div className={`p-3 rounded-2xl max-w-[80%] font-mono font-bold text-sm tracking-widest ${
                 msg.uid === user?.uid ? 'bg-zinc-900 text-white rounded-tr-none' : 'bg-zinc-100 text-zinc-900 rounded-tl-none'
@@ -1468,6 +1494,7 @@ export default function App() {
               </div>
             </div>
           ))}
+          <div ref={chatEndRef} />
           {chatMessages.length === 0 && (
             <div className="text-center py-12 text-zinc-400 font-bold italic">No hay mensajes aún...</div>
           )}
@@ -1489,6 +1516,20 @@ export default function App() {
             <Send className="w-5 h-5" />
           </button>
         </div>
+        {loginError && !user && (
+          <div className="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-xl text-[9px] font-bold text-rose-600 uppercase tracking-widest flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+            <button 
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="w-full py-1.5 bg-rose-600 text-white rounded-lg flex items-center justify-center gap-2"
+            >
+              <Share className="w-3 h-3" /> Abrir en pestaña nueva
+            </button>
+          </div>
+        )}
         {!user && (
           <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-4">
             Debes <button onClick={handleSignIn} className="text-zinc-900 underline">conectar tu perfil</button> para enviar mensajes
@@ -1748,10 +1789,24 @@ export default function App() {
                   ) : (
                     <button 
                       onClick={() => { handleSignIn(); setIsMenuOpen(false); }}
-                      className="w-full py-4 bg-zinc-900 text-white font-black rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3 mb-6"
+                      className="w-full py-4 bg-zinc-900 text-white font-black rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3 mb-2"
                     >
                       <LogIn className="w-5 h-5" /> Conectar Perfil
                     </button>
+                  )}
+                  {loginError && (
+                    <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-[10px] font-bold text-rose-600 uppercase tracking-widest flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{loginError}</span>
+                      </div>
+                      <button 
+                        onClick={() => window.open(window.location.href, '_blank')}
+                        className="w-full py-2 bg-rose-600 text-white rounded-lg flex items-center justify-center gap-2 text-[9px]"
+                      >
+                        <Share className="w-3 h-3" /> Abrir en pestaña nueva
+                      </button>
+                    </div>
                   )}
                   <button 
                     onClick={() => setSoundEnabled(!soundEnabled)}
